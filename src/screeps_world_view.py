@@ -88,12 +88,12 @@ def format_room():
         return rooms, users
 
 def get_avatar(users):
-    Path("../.avatar").mkdir(parents=True, exist_ok=True)
+    Path(".avatar").mkdir(parents=True, exist_ok=True)
 
     for username in users:
         print(f'下载头像 - {username}')
         svg = requests.get(f'https://screeps.com/api/user/badge-svg?username={username}').content
-        cairosvg.svg2png(bytestring=svg, write_to=f'../.avatar/{username}.png')
+        cairosvg.svg2png(bytestring=svg, write_to=f'.avatar/{username}.png')
         # print()
         # img = Image.open(BytesIO(requests.get(f'https://screeps.com/api/user/badge-svg?username={username}').content))
         # img.save(f'../.avatar/{username}.png')

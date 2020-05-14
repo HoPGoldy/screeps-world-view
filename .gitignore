@@ -1,4 +1,5 @@
 .rooms/
+.avatar
 config.JSON
 background.png
 world_stats.json

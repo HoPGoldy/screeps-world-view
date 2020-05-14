@@ -5,7 +5,7 @@ from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
-import cairosvg
+# import cairosvg
 import requests
 
 # 每个区块的边长像素值
@@ -29,8 +29,7 @@ def draw_background():
                 img = Image.open(f'./.rooms/{roomName}.png')
             else:
                 print(f'getting {roomName}')
-                img = Image.open(BytesIO(
-                    requests.get(f'https://d3os7yery2usni.cloudfront.net/map/shard3/zoom1/{roomName}.png'.content))
+                img = Image.open(BytesIO(requests.get(f'https://d3os7yery2usni.cloudfront.net/map/shard3/zoom1/{roomName}.png'.content)))
                 img.save(f'./.rooms/{roomName}.png')
             background.paste(img, (x * ROOM_PIXEL, y * ROOM_PIXEL))
 
@@ -84,9 +83,9 @@ def format_room():
                     users.append(rooms[room_name]["owner"])
             
             if 'respawnArea' in ret["stats"][room_name]:
-                rooms[room_name]["respawn"] = True
-            else if 'novice' in ret["stats"][room_name]:
-                rooms[room_name]["novice"] = True
+                rooms[room_name]["status"] = 'respawn'
+            elif 'novice' in ret["stats"][room_name]:
+                rooms[room_name]["status"] = 'novice'
 
         # print(rooms)
         # print(users)
@@ -123,21 +122,29 @@ def pixel2room(pos):
     return room
 
 
-def add_inactivated_mask(background, x, y):
+def add_inactivated_mask(background, x, y, mask_type='inactivated'):
     """在指定位置添加未开放房间蒙版
     
     Args:
         background: Image Object，要添加未开放房间的底图
         x: 要添加到的房间左上角的 x 轴像素位置
         y: 要添加到的房间左上角的 y 轴像素位置
+        mask_type: 蒙版类型, inactivated respawn novice 三者之一
 
     Returns:
         Image Object，添加好蒙版的地图
     """
-    mask = Image.new('RGBA', (20, 20), (255, 255, 255))
+
+    colors = {
+        "inactivated": '#000000',
+        "respawn": '#006bff',
+        "novice": '#7cff7c'
+    }
+    
+    mask = Image.new('RGBA', (20, 20), colors[mask_type])
     # 取出指定位置的房间
     room = background.crop((x, y, x + 20, y + 20))
     # 将取出的位置和蒙版贴在一起然后粘回去
-    background.paste(Image.blend(room, mask, 0.7), (x, y))
+    background.paste(Image.blend(room, mask, 0.5), (x, y))
 
     return background

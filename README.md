@@ -26,5 +26,5 @@ pip3 install -r requirements.txt
 # 运行
 
 ```
-python .\pictureGen.py
+python src/main.py
 ```

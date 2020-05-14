@@ -1,5 +1,7 @@
 .rooms/
 config.JSON
+background.png
+world_stats.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

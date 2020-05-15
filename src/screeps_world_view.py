@@ -1,5 +1,5 @@
 import json
-import os
+from os import path, makedirs
 import math
 from io import BytesIO
 from pathlib import Path
@@ -12,33 +12,58 @@ import requests
 ROOM_PIXEL = 200
 # 整个世界的区块数量
 WORLD_SIZE = 14
+# 放大倍数，因为默认情况下一个房间只有 20 像素，会影响显示效果，但是该值太大会导致地图显示模糊
+ZOOM = 2
+
+class ScreepsWorldView:
+    background = None
+    cache_path = None
+
+    def __init__(self, shard=3):
+        if not path.exists('.screeps_cache'):
+            self.init_cache_folder()
+
+        self.cache_path = f'.screeps_cache/{shard}'
+        if path.exists(f'{self.cache_path}/background.png'):
+            self.background = Image.open(f'{self.cache_path}/background.png')
+        else:
+            self.background = self.draw_background()
+        
+
+    def init_cache_folder(self):
+        for shard_name in [ '0', '1', '2', '3']:
+            for type_name in [ 'room', 'avatar' ]:
+                makedirs(f'.screeps_cache/{shard_name}/{type_name}')
+        print('缓存目录创建成功')
 
 
-def draw_background():
-    background = Image.new('RGBA', (WORLD_SIZE * ROOM_PIXEL,) * 2, (0xff,) * 4)
+    def draw_background(self):
+        background = Image.new('RGBA', (WORLD_SIZE * ROOM_PIXEL,) * 2, (0xff,) * 4)
 
-    xRoomName = ["W69", "W59", "W49", "W39", "W29", "W19", "W9", "E0", "E10", "E20", "E30", "E40", "E50", "E60"]
-    yRoomName = ["N69", "N59", "N49", "N39", "N29", "N19", "N9", "S0", "S10", "S20", "S30", "S40", "S50", "S60"]
+        xRoomName = ["W69", "W59", "W49", "W39", "W29", "W19", "W9", "E0", "E10", "E20", "E30", "E40", "E50", "E60"]
+        yRoomName = ["N69", "N59", "N49", "N39", "N29", "N19", "N9", "S0", "S10", "S20", "S30", "S40", "S50", "S60"]
 
-    Path("./.rooms").mkdir(parents=True, exist_ok=True)
+        for x in range(len(xRoomName)):
+            for y in range(len(yRoomName)):
+                roomName = xRoomName[x] + yRoomName[y]
+                room_img_path = f'{self.cache_path}/room/{roomName}.png'
+                if path.exists(room_img_path):
+                    img = Image.open(room_img_path)
+                else:
+                    print(f'下载房间 - {roomName}')
+                    img = Image.open(BytesIO(requests.get(f'https://d3os7yery2usni.cloudfront.net/map/shard3/zoom1/{roomName}.png').content))
+                    img.save(room_img_path)
+                background.paste(img, (x * ROOM_PIXEL, y * ROOM_PIXEL))
 
-    for x in range(len(xRoomName)):
-        for y in range(len(yRoomName)):
-            roomName = xRoomName[x] + yRoomName[y]
-            if os.path.exists(f'./.rooms/{roomName}.png'):
-                img = Image.open(f'./.rooms/{roomName}.png')
-            else:
-                print(f'getting {roomName}')
-                img = Image.open(BytesIO(requests.get(f'https://d3os7yery2usni.cloudfront.net/map/shard3/zoom1/{roomName}.png'.content)))
-                img.save(f'./.rooms/{roomName}.png')
-            background.paste(img, (x * ROOM_PIXEL, y * ROOM_PIXEL))
+        background.save(f'{self.cache_path}/background.png')
+        print('房间下载完成')
 
-    background.save('background.png')
+        return background
 
 
-def get_room_name(world_size=70, step=1):
-    name_x = [f'W{i}' for i in range(0, world_size, step)] + [f'E{i}' for i in range(0, world_size, step)]
-    name_y = [f'S{i}' for i in range(0, world_size, step)] + [f'N{i}' for i in range(0, world_size, step)]
+def get_room_name(world_size=70):
+    name_x = [f'W{i}' for i in range(0, world_size)] + [f'E{i}' for i in range(0, world_size)]
+    name_y = [f'S{i}' for i in range(0, world_size)] + [f'N{i}' for i in range(0, world_size)]
     return [x + y for x in name_x for y in name_y]
 
 
@@ -82,10 +107,11 @@ def format_room():
                 if (rooms[room_name]["owner"] not in users):
                     users.append(rooms[room_name]["owner"])
             
-            if 'respawnArea' in ret["stats"][room_name]:
-                rooms[room_name]["status"] = 'respawn'
-            elif 'novice' in ret["stats"][room_name]:
-                rooms[room_name]["status"] = 'novice'
+            # 尚不清楚新手区和重生区的渲染规则
+            # if 'respawnArea' in ret["stats"][room_name] and 'novice' not in ret["stats"][room_name]:
+            #     rooms[room_name]["status"] = 'respawn'
+            # elif 'novice' in ret["stats"][room_name] and 'openTime' in ret["stats"][room_name]:
+            #     rooms[room_name]["status"] = 'novice'
 
         # print(rooms)
         # print(users)
@@ -115,9 +141,9 @@ def pixel2room(pos):
     pos_direction = ( ('E', 'W'), ('S', 'N'))
     
     for i, axis in enumerate(pos):
-        code = quadrant_size - axis / 20
+        code = quadrant_size - axis / 40
         # 根据 code 的正负判断其所在象限
-        room += f'{pos_direction[i][0]}{math.floor(-code)}' if code <= 0 else f'{pos_direction[i][1]}{math.floor(code)}'
+        room += f'{pos_direction[i][0]}{math.floor(-code)}' if code <= 0 else f'{pos_direction[i][1]}{math.floor(code - 1)}'
 
     return room
 
@@ -141,9 +167,9 @@ def add_inactivated_mask(background, x, y, mask_type='inactivated'):
         "novice": '#7cff7c'
     }
     
-    mask = Image.new('RGBA', (20, 20), colors[mask_type])
+    mask = Image.new('RGBA', (40, 40), colors[mask_type])
     # 取出指定位置的房间
-    room = background.crop((x, y, x + 20, y + 20))
+    room = background.crop((x, y, x + 40, y + 40))
     # 将取出的位置和蒙版贴在一起然后粘回去
     background.paste(Image.blend(room, mask, 0.5), (x, y))
 

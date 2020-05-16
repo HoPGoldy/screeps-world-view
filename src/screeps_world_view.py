@@ -5,7 +5,7 @@ import math
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import cairosvg
 import requests
 
@@ -15,8 +15,8 @@ ROOM_PIXEL = 20
 ROOM_PRE_SECTOR = 10
 # 整个世界的区块数量
 WORLD_SIZE = 14
-# 放大倍数，因为默认情况下一个房间只有 20 像素，会影响显示效果，但是该值太大会导致地图显示模糊
-ZOOM = 2
+# 放大倍数，因为默认情况下一个房间只有 20 像素，会影响头像显示效果，但是该值太大会导致地图显示模糊
+ZOOM = 3
 # 地图指定区域的颜色
 COLORS = {
     # 未激活区域
@@ -33,12 +33,12 @@ class ScreepsWorldView:
     dist_path = None
 
     rooms = {}
-    users = {}
+    users = []
 
     def __init__(self, shard=3):
         if not path.exists('.screeps_cache'):
             self.init_cache_folder()
-
+ 
         self.cache_path = f'.screeps_cache/{shard}'
         self.dist_path = f'dist/{shard}'
         if path.exists(f'{self.cache_path}/background.png'):
@@ -87,6 +87,8 @@ class ScreepsWorldView:
 
 
     def draw_world(self):
+        self.background = self.background.resize((self.background.size[0] * ZOOM, self.background.size[1] * ZOOM))
+        print('正在绘制世界')
         for x in range(0, WORLD_SIZE * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM * 2, ROOM_PIXEL * ZOOM):
             for y in range(0, WORLD_SIZE * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM * 2, ROOM_PIXEL * ZOOM):
                 room_name = self._pixel2room((x, y))
@@ -95,15 +97,15 @@ class ScreepsWorldView:
                 
                 room = self.rooms[room_name]
                 if room['status'] == 'out of borders':
-                    add_inactivated_mask(x, y, 'inactivated')
+                    self.add_inactivated_mask(x, y, 'inactivated')
                 elif room['status'] == 'respawn':
-                    add_inactivated_mask(x, y, 'respawn')
+                    self.add_inactivated_mask(x, y, 'respawn')
                 elif room['status'] == 'novice':
-                    add_inactivated_mask(x, y, 'novice')
+                    self.add_inactivated_mask(x, y, 'novice')
                 
                 if 'owner' in room:
                     avatar_path = f'{self.cache_path}/avatar/{room["owner"]}.png'
-                    if os.path.exists(avatar_path):
+                    if path.exists(avatar_path):
                         correct_size = (6 * ZOOM, 6 * ZOOM) if room['rcl'] == 0 else (10 * ZOOM, 10 * ZOOM)
                         try:
                             avatar = Image.open(avatar_path).resize(correct_size)
@@ -112,7 +114,7 @@ class ScreepsWorldView:
                                 mask = Image.new('RGBA', correct_size)
                                 avatar = Image.blend(avatar, mask, 0.3)
 
-                            bg.paste(avatar, (x + int((ROOM_PIXEL * ZOOM - correct_size[0]) / 2), y + int((ROOM_PIXEL * ZOOM - correct_size[1]) / 2)), mask=avatar)
+                            self.background.paste(avatar, (x + int(((ROOM_PIXEL * ZOOM) - correct_size[0]) / 2), y + int(((ROOM_PIXEL * ZOOM) - correct_size[1]) / 2)), mask=avatar)
                         except UnidentifiedImageError:
                             print(f'头像失效 - {avatar_path}')                        
                     else:
@@ -123,13 +125,14 @@ class ScreepsWorldView:
         self.background.save(f'{self.dist_path}/{result_name}.png')
 
 
-    def get_room_name(self, world_size=70):
+    def _get_room_name(self, world_size=70):
         name_x = [f'W{i}' for i in range(0, world_size)] + [f'E{i}' for i in range(0, world_size)]
         name_y = [f'S{i}' for i in range(0, world_size)] + [f'N{i}' for i in range(0, world_size)]
         return [x + y for x in name_x for y in name_y]
 
 
     def get_world_stats(self):
+        print('正在加载世界信息')
         with open("config.json") as auth:
             d = json.load(auth)
             username = d["username"]
@@ -137,13 +140,14 @@ class ScreepsWorldView:
         
         r = requests.post('https://screeps.com/api/auth/signin', json={'email': username, 'password': password})
         r.raise_for_status()
-        # token = json.loads(r.text)["token"]
+        token = json.loads(r.text)["token"]
 
-        params = {'rooms': get_room_name(), 'shard': 'shard3', 'statName': 'owner0'}
+        params = {'rooms': self._get_room_name(), 'shard': 'shard3', 'statName': 'owner0'}
         r = requests.post('https://screeps.com/api/game/map-stats', json=params, headers={ 'X-Token': token, 'X-Username': token }, timeout=120)
-        # token = r.headers["X-Token"]
+        token = r.headers["X-Token"]
         
         self._format_room(json.loads(r.text))
+        print('加载完成')
         return self
 
 
@@ -168,11 +172,13 @@ class ScreepsWorldView:
         return self
 
 
-    def get_avatar(self, users):
-        for username in users:
-            print(f'下载头像 - {username}')
-            svg = requests.get(f'https://screeps.com/api/user/badge-svg?username={username}').content
-            cairosvg.svg2png(bytestring=svg, write_to=f'{self.cache_path}/avatar/{username}.png')
+    def get_avatar(self):
+        for username in self.users:
+            avatar_path = f'{self.cache_path}/avatar/{username}.png'
+            if not path.exists(avatar_path):
+                print(f'下载头像 - {username}')
+                svg = requests.get(f'https://screeps.com/api/user/badge-svg?username={username}').content
+                cairosvg.svg2png(bytestring=svg, write_to=avatar_path)
 
         print('头像下载完成')
         return self
@@ -192,7 +198,7 @@ class ScreepsWorldView:
         pos_direction = ( ('E', 'W'), ('S', 'N'))
         
         for i, axis in enumerate(pos):
-            code = quadrant_size - axis / ROOM_PIXEL * ZOOM
+            code = quadrant_size - axis / (ROOM_PIXEL * ZOOM)
             # 根据 code 的正负判断其所在象限
             room += f'{pos_direction[i][0]}{math.floor(-code)}' if code <= 0 else f'{pos_direction[i][1]}{math.floor(code - 1)}'
 

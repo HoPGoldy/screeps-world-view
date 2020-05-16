@@ -1,5 +1,6 @@
 import json
 from os import path, makedirs
+import time
 import math
 from io import BytesIO
 from pathlib import Path
@@ -29,6 +30,7 @@ COLORS = {
 class ScreepsWorldView:
     background = None
     cache_path = None
+    dist_path = None
 
     rooms = {}
     users = {}
@@ -38,6 +40,7 @@ class ScreepsWorldView:
             self.init_cache_folder()
 
         self.cache_path = f'.screeps_cache/{shard}'
+        self.dist_path = f'dist/{shard}'
         if path.exists(f'{self.cache_path}/background.png'):
             self.background = Image.open(f'{self.cache_path}/background.png')
         else:
@@ -55,6 +58,7 @@ class ScreepsWorldView:
         for shard_name in [ '0', '1', '2', '3']:
             for type_name in [ 'room', 'avatar' ]:
                 makedirs(f'.screeps_cache/{shard_name}/{type_name}')
+            makedirs(f'dist/{shard_name}')
         print('缓存目录创建成功')
 
 
@@ -115,7 +119,8 @@ class ScreepsWorldView:
                         print(f'未找到头像 - {avatar_path}')
 
         print('绘制完成')
-        self.background.save('result.png')
+        result_name = time.strftime('%Y-%m-%d', time.localtime(time.time()))
+        self.background.save(f'{self.dist_path}/{result_name}.png')
 
 
     def get_room_name(self, world_size=70):

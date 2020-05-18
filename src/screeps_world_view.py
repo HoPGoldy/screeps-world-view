@@ -34,10 +34,12 @@ class ScreepsWorldView:
     cache_path = None
     # 成果路径
     dist_path = None
-    # 房间信息，用于在底图上添加用户头像
+    # 房间信息，用于在底图上添加用户头像，键为房间名，值为房间配置信息
     rooms = {}
     # 地图中出现的用户名，用于下载头像
     users = []
+    # 所有的用户名头像设置，键为玩家名，值为玩家的头像设置字符串
+    avatars_setting = {}
 
     def __init__(self, shard=3):
         # 没有缓存的话就新建缓存路径
@@ -228,12 +230,17 @@ class ScreepsWorldView:
                 "status": world_stats["stats"][room_name]["status"]
             }
             if ("own" in world_stats["stats"][room_name]):
-                self.rooms[room_name]["owner"] = world_stats["users"][world_stats["stats"][room_name]["own"]["user"]]["username"]
+                user_id = world_stats["stats"][room_name]["own"]["user"]
+                user_info = world_stats["users"][user_id]
+
+                self.rooms[room_name]["owner"] = user_info["username"]
                 self.rooms[room_name]["rcl"] = world_stats["stats"][room_name]["own"]["level"]
 
                 # 把用户加入用户列表中
                 if (self.rooms[room_name]["owner"] not in self.users):
                     self.users.append(self.rooms[room_name]["owner"])
+                    # 保留用户头像设置
+                    self.avatars_setting[self.rooms[room_name]["owner"]] = json.dumps(user_info["badge"])
             
             # 尚不清楚新手区和重生区的渲染规则
             # if 'respawnArea' in world_stats["stats"][room_name] and 'novice' not in world_stats["stats"][room_name]:
@@ -246,17 +253,33 @@ class ScreepsWorldView:
 
     def get_avatar(self):
         """下载头像
-        会遍历 self.users 并下载对应的头像
+        会遍历 self.users 并下载对应的头像，该方法会自动缓存下载好的头像，并在后续使用时通过 badge 的配置变动来局部更新头像
 
         Returns:
             self: 自身
         """
+        avatars_setting_json_path = f'{self.cache_path}/avatar/player_setting.json'
+
+        # 获取之前缓存的玩家头像配置，用于和最新的用户设置做比对，如果有不同则更新其头像，否则使用缓存好的头像
+        cache_avatars_setting = None
+        if path.exists(avatars_setting_json_path):
+            with open(avatars_setting_json_path) as avatars:
+                cache_avatars_setting = json.loads(avatars.read())
+
         for username in self.users:
             avatar_path = f'{self.cache_path}/avatar/{username}.png'
-            if not path.exists(avatar_path):
-                print(f'下载头像 - {username}')
+            # 头像存在就比较头像配置是否相同，完全一样就不需要下载
+            if path.exists(avatar_path) and cache_avatars_setting and self.avatars_setting[username] == cache_avatars_setting[username]:
+                print(f'应用缓存 - {username}')
+                continue
+            else:
+                print(f'更新头像 - {username}')
                 svg = requests.get(f'https://screeps.com/api/user/badge-svg?username={username}').content
                 cairosvg.svg2png(bytestring=svg, write_to=avatar_path)
+
+        # 把最新的用户配置保存下来供下次绘制时使用
+        with open(avatars_setting_json_path, 'w') as avatars:
+            avatars.write(json.dumps(self.avatars_setting))
 
         print('头像下载完成')
         return self

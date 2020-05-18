@@ -17,7 +17,7 @@ ROOM_PIXEL = 20
 ROOM_PRE_SECTOR = 10
 # 整个世界的区块数量
 WORLD_SIZE = 14
-# 放大倍数，因为默认情况下一个房间只有 20 像素，会影响头像显示效果，但是该值太大会导致地图显示模糊
+# 放大倍数，必须大于 1，因为默认情况下一个房间只有 20 像素，会影响头像显示效果，但是该值太大会导致地图显示模糊
 ZOOM = 3
 # 地图指定区域的颜色
 COLORS = {
@@ -54,6 +54,7 @@ class ScreepsWorldView:
         # 初始化地图实例
         if path.exists(f'{self.cache_path}/background.png'):
             self.background = Image.open(f'{self.cache_path}/background.png')
+            print('使用缓存地图')
         else:
             self.background = self.draw_background()
 
@@ -63,7 +64,6 @@ class ScreepsWorldView:
         
         入口方法，会自动完成地图绘制工作
         """
-        self.draw_background()
         self.get_world_stats()
         self.get_avatar()
         self.draw_world()
@@ -77,16 +77,20 @@ class ScreepsWorldView:
         for shard_name in [ '0', '1', '2', '3']:
             for type_name in [ 'room', 'avatar' ]:
                 makedirs(f'.screeps_cache/{shard_name}/{type_name}')
-            makedirs(f'dist/{shard_name}')
-        print('缓存目录创建成功')
+            
+            # 创建结果文件夹
+            dist_path = f'dist/{shard_name}'
+            if not path.exists(dist_path): makedirs(dist_path)
+        # print('缓存目录创建成功')
 
 
     def draw_background(self):
         """绘制底图
         下载区块瓦片，并拼接成整个世界底图
+        该方法会自动将底图缓存起来
 
         Returns:
-            self: 自身
+            Image: 绘制好的世界底图
         """
 
         # 新建空白底图，注意这里并没有使用缩放，而是直接使用默认 dpi 进行拼接
@@ -111,11 +115,12 @@ class ScreepsWorldView:
                     img.save(room_img_path)
                 background.paste(img, (x * ROOM_PIXEL * ROOM_PRE_SECTOR, y * ROOM_PIXEL * ROOM_PRE_SECTOR))
 
-        # 保存下载供以后使用
-        background.save(f'{self.cache_path}/background.png')
         bar.close()
 
-        return self
+        # 保存下载供以后使用
+        self.background.save(f'{self.cache_path}/background.png')
+
+        return self._resize(background)
 
 
     def draw_world(self):
@@ -125,13 +130,10 @@ class ScreepsWorldView:
         Returns:
             self: 自身
         """
-
-        # 将底图安装缩放等级进行放大
-        self.background = self.background.resize((self.background.size[0] * ZOOM, self.background.size[1] * ZOOM))
         bar = Bar('正在绘制世界')
 
         # 从像素角度挨个遍历所有房间进行绘制
-        for x in range(0, WORLD_SIZE * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM * 2, ROOM_PIXEL * ZOOM):
+        for x in range(0, WORLD_SIZE * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM, ROOM_PIXEL * ZOOM):
             for y in range(0, WORLD_SIZE * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM * 2, ROOM_PIXEL * ZOOM):
                 room_name = self._pixel2room((x, y))
                 bar.update(room_name)
@@ -176,6 +178,38 @@ class ScreepsWorldView:
         bar.close()
 
         return self
+
+
+    def _resize(self, background):
+        """放大底图
+        更好的放大，Image.resize 会导致底图失真
+
+        Args:
+            background: Image 要放大的底图
+
+        Returns:
+            Image 放大后的底图
+        """
+        size = background.size
+        new_background = Image.new('RGBA', (WORLD_SIZE * ROOM_PIXEL * ROOM_PRE_SECTOR * ZOOM,) * 2, (0xff,) * 4)
+
+        bar = Bar('正在放大底图')
+        # 遍历所有行
+        for y in range(size[1]):
+            row = []
+            # 把每个像素复制 ZOOM 份
+            for x in range(size[0]):
+                for _ in range(ZOOM):
+                    row.append(background.getpixel((x, y)))
+            # 把每个扩充好的行重复粘贴 ZOOM 份
+            for new_y in range(ZOOM * y - ZOOM, ZOOM * y):
+                for new_x, pixel in enumerate(row):
+                    # print(new_x, new_y, pixel)
+                    new_background.putpixel((new_x, new_y), pixel)
+            bar.update(f'{y}/{size[1]}')
+        bar.close()
+
+        return new_background
 
 
     def _get_room_name(self, world_size=70):

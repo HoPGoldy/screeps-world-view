@@ -9,6 +9,8 @@ from PIL import Image, UnidentifiedImageError
 import cairosvg
 import requests
 
+from simple_bar import Bar
+
 # 每个房间的边长像素值
 ROOM_PIXEL = 20
 # 区块由几乘几的房间组成
@@ -93,6 +95,8 @@ class ScreepsWorldView:
         xRoomName = ["W69", "W59", "W49", "W39", "W29", "W19", "W9", "E0", "E10", "E20", "E30", "E40", "E50", "E60"]
         yRoomName = ["N69", "N59", "N49", "N39", "N29", "N19", "N9", "S0", "S10", "S20", "S30", "S40", "S50", "S60"]
 
+        bar = Bar('正在下载房间')
+
         # 遍历所有瓦片进行下载并粘贴到指定位置
         for x in range(len(xRoomName)):
             for y in range(len(yRoomName)):
@@ -102,14 +106,14 @@ class ScreepsWorldView:
                 if path.exists(room_img_path):
                     img = Image.open(room_img_path)
                 else:
-                    print(f'下载房间 - {roomName}')
+                    bar.update(roomName)
                     img = Image.open(BytesIO(requests.get(f'https://d3os7yery2usni.cloudfront.net/map/shard3/zoom1/{roomName}.png').content))
                     img.save(room_img_path)
                 background.paste(img, (x * ROOM_PIXEL * ROOM_PRE_SECTOR, y * ROOM_PIXEL * ROOM_PRE_SECTOR))
 
         # 保存下载供以后使用
         background.save(f'{self.cache_path}/background.png')
-        print('房间下载完成')
+        bar.close()
 
         return self
 
@@ -124,12 +128,14 @@ class ScreepsWorldView:
 
         # 将底图安装缩放等级进行放大
         self.background = self.background.resize((self.background.size[0] * ZOOM, self.background.size[1] * ZOOM))
-        print('正在绘制世界')
+        bar = Bar('正在绘制世界')
 
         # 从像素角度挨个遍历所有房间进行绘制
         for x in range(0, WORLD_SIZE * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM * 2, ROOM_PIXEL * ZOOM):
             for y in range(0, WORLD_SIZE * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM * 2, ROOM_PIXEL * ZOOM):
                 room_name = self._pixel2room((x, y))
+                bar.update(room_name)
+
                 if room_name not in self.rooms:
                     continue
                 room = self.rooms[room_name]
@@ -159,14 +165,15 @@ class ScreepsWorldView:
                             # 粘贴到指定位置
                             self.background.paste(avatar, (x + int(((ROOM_PIXEL * ZOOM) - correct_size[0]) / 2), y + int(((ROOM_PIXEL * ZOOM) - correct_size[1]) / 2)), mask=avatar)
                         except UnidentifiedImageError:
-                            print(f'头像失效 - {avatar_path}')                        
+                            bar.update(f'头像失效 - {avatar_path}')
                     else:
-                        print(f'未找到头像 - {avatar_path}')
+                        bar.update(f'未找到头像 - {avatar_path}')
 
-        print('绘制完成')
+        bar.update('保存中')
         # 按照日期进行保存
         result_name = time.strftime('%Y-%m-%d', time.localtime(time.time()))
         self.background.save(f'{self.dist_path}/{result_name}.png')
+        bar.close()
 
         return self
 
@@ -193,7 +200,9 @@ class ScreepsWorldView:
         Returns:
             self: 自身
         """
-        print('正在加载世界信息')
+        bar = Bar('正在加载世界信息')
+        time.sleep(0.1)
+
         with open("config.json") as auth:
             d = json.load(auth)
             username = d["username"]
@@ -212,7 +221,7 @@ class ScreepsWorldView:
         
         # 将获取到的信息格式化成需要的样子
         self._format_room(json.loads(r.text))
-        print('加载完成')
+        bar.close()
         return self
 
 
@@ -266,14 +275,15 @@ class ScreepsWorldView:
             with open(avatars_setting_json_path) as avatars:
                 cache_avatars_setting = json.loads(avatars.read())
 
-        for username in self.users:
+        bar = Bar('下载头像')
+        for i, username in enumerate(self.users):
             avatar_path = f'{self.cache_path}/avatar/{username}.png'
             # 头像存在就比较头像配置是否相同，完全一样就不需要下载
-            if path.exists(avatar_path) and cache_avatars_setting and self.avatars_setting[username] == cache_avatars_setting[username]:
-                print(f'应用缓存 - {username}')
+            if path.exists(avatar_path) and cache_avatars_setting and username in cache_avatars_setting and self.avatars_setting[username] == cache_avatars_setting[username]:
+                bar.update(f'{i}/{len(self.users)} 应用缓存 {username}')
                 continue
             else:
-                print(f'更新头像 - {username}')
+                bar.update(f'{i + 1}/{len(self.users)} 下载 {username}')
                 svg = requests.get(f'https://screeps.com/api/user/badge-svg?username={username}').content
                 cairosvg.svg2png(bytestring=svg, write_to=avatar_path)
 
@@ -281,7 +291,7 @@ class ScreepsWorldView:
         with open(avatars_setting_json_path, 'w') as avatars:
             avatars.write(json.dumps(self.avatars_setting))
 
-        print('头像下载完成')
+        bar.close()
         return self
 
 

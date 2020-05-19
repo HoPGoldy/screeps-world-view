@@ -14,11 +14,10 @@ from simple_bar import Bar
 ROOM_PIXEL = 20
 # 区块由几乘几的房间组成
 ROOM_PRE_SECTOR = 10
-# 整个世界的区块数量
-WORLD_SIZE = 14
 # 放大倍数，必须大于 1，因为默认情况下一个房间只有 20 像素，会影响头像显示效果，但是该值太大会导致地图显示模糊
 ZOOM = 3
-AVATAR_OUTLINE_COLOR = '#222'
+# 头像边框的颜色
+AVATAR_OUTLINE_COLOR = '#151515'
 # 地图指定区域的颜色
 COLORS = {
     # 未激活区域
@@ -38,6 +37,8 @@ class ScreepsWorldView:
     cache_path = None
     # 成果路径
     dist_path = None
+    # 世界尺寸信息，在 _init_world 中初始化
+    shard_info = {}
     # 房间信息，用于在底图上添加用户头像，键为房间名，值为房间配置信息
     rooms = {}
     # 地图中出现的用户名，用于下载头像
@@ -49,6 +50,7 @@ class ScreepsWorldView:
 
     def __init__(self, shard=3):
         self.shard = shard
+        
         print(f'--- 开始绘制 Screeps Shard{shard} {self.result_name} ---')
         # 没有缓存的话就新建缓存路径
         if not path.exists('.screeps_cache'):
@@ -56,6 +58,9 @@ class ScreepsWorldView:
  
         self.cache_path = f'.screeps_cache/{shard}'
         self.dist_path = f'dist/{shard}'
+
+        # 初始化世界
+        self._init_world()
 
         # 初始化地图实例
         if path.exists(f'{self.cache_path}/background.png'):
@@ -100,25 +105,26 @@ class ScreepsWorldView:
         """
 
         # 新建空白底图，注意这里并没有使用缩放，而是直接使用默认 dpi 进行拼接
-        background = Image.new('RGBA', (WORLD_SIZE * ROOM_PIXEL * ROOM_PRE_SECTOR,) * 2, (0xff,) * 4)
+        background = Image.new('RGBA', (self._get_sector_num() * ROOM_PIXEL * ROOM_PRE_SECTOR,) * 2, (0xff,) * 4)
 
-        xRoomName = ["W69", "W59", "W49", "W39", "W29", "W19", "W9", "E0", "E10", "E20", "E30", "E40", "E50", "E60"]
-        yRoomName = ["N69", "N59", "N49", "N39", "N29", "N19", "N9", "S0", "S10", "S20", "S30", "S40", "S50", "S60"]
-
+        x_sectors_name, y_sectors_name = self._get_sectors_name()
+        total_sector_num = len(x_sectors_name) * len(y_sectors_name)
         bar = Bar('正在下载房间')
-
+        
         # 遍历所有瓦片进行下载并粘贴到指定位置
-        for x in range(len(xRoomName)):
-            for y in range(len(yRoomName)):
-                roomName = xRoomName[x] + yRoomName[y]
-                room_img_path = f'{self.cache_path}/room/{roomName}.png'
+        for x in range(len(x_sectors_name)):
+            for y in range(len(y_sectors_name)):
+                sector_name = x_sectors_name[x] + y_sectors_name[y]
+                sector_img_path = f'{self.cache_path}/room/{sector_name}.png'
+                # 更新进度
+                bar.update(f'{sector_name} {len(y_sectors_name) * x + y + 1}/{total_sector_num}')
+
                 # 有缓存的话直接用，底图永远不会发生变化
-                if path.exists(room_img_path):
-                    img = Image.open(room_img_path)
+                if path.exists(sector_img_path):
+                    img = Image.open(sector_img_path)
                 else:
-                    bar.update(roomName)
-                    img = Image.open(BytesIO(requests.get(f'https://d3os7yery2usni.cloudfront.net/map/shard{self.shard}/zoom1/{roomName}.png').content))
-                    img.save(room_img_path)
+                    img = Image.open(BytesIO(requests.get(f'https://d3os7yery2usni.cloudfront.net/map/shard{self.shard}/zoom1/{sector_name}.png').content))
+                    img.save(sector_img_path)
                 background.paste(img, (x * ROOM_PIXEL * ROOM_PRE_SECTOR, y * ROOM_PIXEL * ROOM_PRE_SECTOR))
 
         bar.close()
@@ -140,9 +146,11 @@ class ScreepsWorldView:
         """
         bar = Bar('正在绘制世界')
 
+        sector_num = self._get_sector_num()
+
         # 从像素角度挨个遍历所有房间进行绘制
-        for x in range(0, WORLD_SIZE * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM, ROOM_PIXEL * ZOOM):
-            for y in range(0, WORLD_SIZE * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM * 2, ROOM_PIXEL * ZOOM):
+        for x in range(0, sector_num * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM, ROOM_PIXEL * ZOOM):
+            for y in range(0, sector_num * ROOM_PRE_SECTOR * ROOM_PIXEL * ZOOM * 2, ROOM_PIXEL * ZOOM):
                 room_name = self._pixel2room((x, y))
                 bar.update(room_name)
 
@@ -186,7 +194,7 @@ class ScreepsWorldView:
             Image 放大后的底图
         """
         size = background.size
-        new_background = Image.new('RGBA', (WORLD_SIZE * ROOM_PIXEL * ROOM_PRE_SECTOR * ZOOM,) * 2, (0xff,) * 4)
+        new_background = Image.new('RGBA', (self._get_sector_num() * ROOM_PIXEL * ROOM_PRE_SECTOR * ZOOM,) * 2, (0xff,) * 4)
 
         bar = Bar('正在放大底图')
         # 遍历所有行
@@ -245,18 +253,17 @@ class ScreepsWorldView:
             return None
 
 
-    def _get_room_name(self, world_size=70):
+    def _get_room_name(self):
         """获取所有房间名
         按照房间尺寸遍历出所有房间名
-
-        Args:
-            world_size: 一个象限的边长房间数量
 
         Returns:
             array: 所有的房间名列表
         """
-        name_x = [f'W{i}' for i in range(0, world_size)] + [f'E{i}' for i in range(0, world_size)]
-        name_y = [f'S{i}' for i in range(0, world_size)] + [f'N{i}' for i in range(0, world_size)]
+        quadrant_size = self._get_quadrant_size()
+
+        name_x = [f'W{i}' for i in range(0, quadrant_size)] + [f'E{i}' for i in range(0, quadrant_size)]
+        name_y = [f'S{i}' for i in range(0, quadrant_size)] + [f'N{i}' for i in range(0, quadrant_size)]
         return [x + y for x in name_x for y in name_y]
 
 
@@ -348,12 +355,12 @@ class ScreepsWorldView:
         bar = Bar('下载头像')
         for i, username in enumerate(self.users):
             avatar_path = f'{self.cache_path}/avatar/{username}.png'
+            bar.update(f'{username} {i + 1}/{len(self.users)}')
+
             # 头像存在就比较头像配置是否相同，完全一样就不需要下载
             if path.exists(avatar_path) and cache_avatars_setting and username in cache_avatars_setting and self.avatars_setting[username] == cache_avatars_setting[username]:
-                bar.update(f'{i}/{len(self.users)} 应用缓存 {username}')
                 continue
             else:
-                bar.update(f'{i + 1}/{len(self.users)} 下载 {username}')
                 svg = requests.get(f'https://screeps.com/api/user/badge-svg?username={username}').content
                 cairosvg.svg2png(bytestring=svg, write_to=avatar_path)
 
@@ -375,7 +382,7 @@ class ScreepsWorldView:
             string, 该位置所在的房间名称
         """
         room = ''
-        quadrant_size = 70
+        quadrant_size = self._get_quadrant_size()
         pos_direction = ( ('E', 'W'), ('S', 'N'))
         
         for i, axis in enumerate(pos):
@@ -407,5 +414,56 @@ class ScreepsWorldView:
         return self
 
     
-    def get_sector_name(self):
-        pass
+    def _init_world(self):
+        """初始化世界信息
+        会加载世界的尺寸，没有返回值
+        """
+        bar = Bar('正在加载世界尺寸')
+        self.shard_info = json.loads(requests.get(f'https://screeps.com/api/game/world-size?shard=shard{self.shard}').content)
+        bar.close()
+
+    def _get_sectors_name(self):
+        """获取区块名称数组
+        需要调用 self._init_world()
+        将会获取该世界的区块名称（区块右下角的房间名），可以用该名称来下载区块地图
+
+        Return:
+            x_sectors_name, y_sectors_name: 房间名列表，两两相加即可获得最终房间名
+        """
+        shard_info = self.shard_info
+        
+        x_sectors_name = []
+        for x in range(0, int(shard_info['width'] / 2), 10):
+            x_sectors_name.append(f'W{x + 9}')
+        x_sectors_name.reverse()
+        for x in range(0, int(shard_info['width'] / 2), 10):
+            x_sectors_name.append(f'E{x}')
+        
+        y_sectors_name = []
+        for y in range(0, int(shard_info['height'] / 2), 10):
+            y_sectors_name.append(f'N{y + 9}')
+        y_sectors_name.reverse()
+        for y in range(0, int(shard_info['height'] / 2), 10):
+            y_sectors_name.append(f'S{y}')
+
+        return x_sectors_name, y_sectors_name
+
+    
+    def _get_quadrant_size(self):
+        """获取象限边长对应的房间数量
+        需要调用 self._init_world()
+        该方法将 screeps 世界视作一个正方形（随便官方并没有确切的这么说），并使用世界的**宽度**计算其边长对应的房间数量
+
+        Return:
+            array: 返回每个象限边长对应的房间数量
+        """
+        return int((self.shard_info['width'] + 9 * 2 ) / 2)
+    
+    def _get_sector_num(self):
+        """获取整个世界边长对应的区块数量
+        需要调用 self._init_world()
+
+        Return:
+            number: 区块数量
+        """
+        return int((self.shard_info['width'] + 9 * 2) / ROOM_PRE_SECTOR)

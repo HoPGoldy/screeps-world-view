@@ -43,4 +43,8 @@ python src/main.py
 
 # 计划
 
-~~头像添加黑色边框~~，**绘制新手区和重生区，支持其他 shard，定时任务，发送至邮箱**
+~~头像添加黑色边框~~，~~绘制新手区和重生区~~，**支持其他 shard，定时任务，发送至邮箱**
+
+# 感谢
+
+感谢 [cookiesjuice](https://github.com/cookiesjuice/) 的代码贡献。

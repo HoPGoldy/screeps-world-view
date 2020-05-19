@@ -3,7 +3,6 @@ from os import path, makedirs
 import time
 import math
 from io import BytesIO
-from pathlib import Path
 
 from PIL import Image, ImageDraw, UnidentifiedImageError
 import cairosvg
@@ -31,6 +30,8 @@ COLORS = {
 }
 
 class ScreepsWorldView:
+    # 要绘制的 shard
+    shard = 3
     # 持有的地图 Image 对象
     background = None
     # 缓存路径
@@ -47,6 +48,7 @@ class ScreepsWorldView:
     result_name = time.strftime('%Y-%m-%d', time.localtime(time.time()))
 
     def __init__(self, shard=3):
+        self.shard = shard
         print(f'--- 开始绘制 Screeps Shard{shard} {self.result_name} ---')
         # 没有缓存的话就新建缓存路径
         if not path.exists('.screeps_cache'):
@@ -115,16 +117,18 @@ class ScreepsWorldView:
                     img = Image.open(room_img_path)
                 else:
                     bar.update(roomName)
-                    img = Image.open(BytesIO(requests.get(f'https://d3os7yery2usni.cloudfront.net/map/shard3/zoom1/{roomName}.png').content))
+                    img = Image.open(BytesIO(requests.get(f'https://d3os7yery2usni.cloudfront.net/map/shard{self.shard}/zoom1/{roomName}.png').content))
                     img.save(room_img_path)
                 background.paste(img, (x * ROOM_PIXEL * ROOM_PRE_SECTOR, y * ROOM_PIXEL * ROOM_PRE_SECTOR))
 
         bar.close()
 
+        # 缩放为指定大小
+        background = self._resize(background)
         # 保存下载供以后使用
-        self.background.save(f'{self.cache_path}/background.png')
+        background.save(f'{self.cache_path}/background.png')
 
-        return self._resize(background)
+        return background
 
 
     def draw_world(self):
@@ -278,7 +282,7 @@ class ScreepsWorldView:
 
         # 登陆后获取所有房间的信息
         # 这里可能比较慢，所以调大了超时时间
-        params = {'rooms': self._get_room_name(), 'shard': 'shard3', 'statName': 'owner0'}
+        params = {'rooms': self._get_room_name(), 'shard': f'shard{self.shard}', 'statName': 'owner0'}
         r = requests.post('https://screeps.com/api/game/map-stats', json=params, headers={ 'X-Token': token, 'X-Username': token }, timeout=120)
         token = r.headers["X-Token"]
         
@@ -297,16 +301,19 @@ class ScreepsWorldView:
         Returns:
             self: 自身
         """
+        now_timestamp = time.mktime(time.localtime()) * 1000
+
         for room_name in world_stats["stats"]:
+            room = world_stats["stats"][room_name]
             self.rooms[room_name] = {
-                "status": world_stats["stats"][room_name]["status"]
+                "status": room["status"]
             }
-            if ("own" in world_stats["stats"][room_name]):
-                user_id = world_stats["stats"][room_name]["own"]["user"]
+            if ("own" in room):
+                user_id = room["own"]["user"]
                 user_info = world_stats["users"][user_id]
 
                 self.rooms[room_name]["owner"] = user_info["username"]
-                self.rooms[room_name]["rcl"] = world_stats["stats"][room_name]["own"]["level"]
+                self.rooms[room_name]["rcl"] = room["own"]["level"]
 
                 # 把用户加入用户列表中
                 if (self.rooms[room_name]["owner"] not in self.users):
@@ -315,10 +322,10 @@ class ScreepsWorldView:
                     self.avatars_setting[self.rooms[room_name]["owner"]] = json.dumps(user_info["badge"])
             
             # 尚不清楚新手区和重生区的渲染规则
-            # if 'respawnArea' in world_stats["stats"][room_name] and 'novice' not in world_stats["stats"][room_name]:
-            #     self.rooms[room_name]["status"] = 'respawn'
-            # elif 'novice' in world_stats["stats"][room_name] and 'openTime' in world_stats["stats"][room_name]:
-            #     self.rooms[room_name]["status"] = 'novice'
+            if 'novice' in room and room['novice'] and room['novice'] >= now_timestamp:
+                self.rooms[room_name]["status"] = 'novice'
+            elif 'respawnArea' in room and room['respawnArea'] and room['respawnArea'] >= now_timestamp:
+                self.rooms[room_name]["status"] = 'respawn'
 
         return self
 
@@ -395,6 +402,10 @@ class ScreepsWorldView:
         # 取出指定位置的房间
         room = self.background.crop((x, y, x + size, y + size))
         # 将取出的位置和蒙版贴在一起然后粘回去
-        self.background.paste(Image.blend(room, mask, 0.5), (x, y))
+        self.background.paste(Image.blend(room, mask, 0.3), (x, y))
 
         return self
+
+    
+    def get_sector_name(self):
+        pass

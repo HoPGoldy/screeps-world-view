@@ -2,7 +2,7 @@
 
 生成如下 screeps 的世界总览图，支持全 shard 绘制。
 
-[![](https://s1.ax1x.com/2020/05/18/YfqmZT.th.png)](https://s1.ax1x.com/2020/05/18/YfqmZT.png)
+[![Y54FPA.th.gif](https://s1.ax1x.com/2020/05/19/Y54FPA.th.gif)](https://s1.ax1x.com/2020/05/19/Y54FPA.gif)
 
 # 版本需要
 

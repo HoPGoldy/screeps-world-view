@@ -19,7 +19,7 @@ ROOM_PRE_SECTOR = 10
 WORLD_SIZE = 14
 # 放大倍数，必须大于 1，因为默认情况下一个房间只有 20 像素，会影响头像显示效果，但是该值太大会导致地图显示模糊
 ZOOM = 3
-AVATAR_OUTLINE_COLOR = '#101010'
+AVATAR_OUTLINE_COLOR = '#222'
 # 地图指定区域的颜色
 COLORS = {
     # 未激活区域
@@ -229,7 +229,8 @@ class ScreepsWorldView:
 
                 # 绘制边框
                 avatar_draw = ImageDraw.Draw(avatar)
-                avatar_draw.ellipse((0, 0, avatar.size[0] - 1, avatar.size[1] - 1), outline=AVATAR_OUTLINE_COLOR, width=2)
+                # 下面 avatar.size[0] - 1 是因为默认情况下会头像会和边框留有一点缝隙
+                avatar_draw.ellipse((0, 0, avatar.size[0] - 1, avatar.size[1]), outline=AVATAR_OUTLINE_COLOR, width=2)
 
                 return avatar
             except UnidentifiedImageError:

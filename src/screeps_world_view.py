@@ -308,7 +308,7 @@ class ScreepsWorldView:
         Returns:
             self: 自身
         """
-        now_timestamp = time.mktime(time.localtime()) * 1000
+        now_timestamp = int(time.time()) * 1000
 
         for room_name in world_stats["stats"]:
             room = world_stats["stats"][room_name]

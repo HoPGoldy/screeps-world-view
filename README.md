@@ -31,3 +31,7 @@ pip3 install -r requirements.txt
 ```
 python src/main.py
 ```
+
+# 计划
+
+~~头像添加黑色边框~~，**绘制新手区和重生区支持其他 shard，定时任务，发送至邮箱**

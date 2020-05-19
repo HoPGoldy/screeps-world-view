@@ -5,7 +5,7 @@ import math
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageDraw, UnidentifiedImageError
 import cairosvg
 import requests
 
@@ -19,6 +19,7 @@ ROOM_PRE_SECTOR = 10
 WORLD_SIZE = 14
 # 放大倍数，必须大于 1，因为默认情况下一个房间只有 20 像素，会影响头像显示效果，但是该值太大会导致地图显示模糊
 ZOOM = 3
+AVATAR_OUTLINE_COLOR = '#101010'
 # 地图指定区域的颜色
 COLORS = {
     # 未激活区域
@@ -42,8 +43,11 @@ class ScreepsWorldView:
     users = []
     # 所有的用户名头像设置，键为玩家名，值为玩家的头像设置字符串
     avatars_setting = {}
+    # 结果文件名
+    result_name = time.strftime('%Y-%m-%d', time.localtime(time.time()))
 
     def __init__(self, shard=3):
+        print(f'--- 开始绘制 Screeps Shard{shard} {self.result_name} ---')
         # 没有缓存的话就新建缓存路径
         if not path.exists('.screeps_cache'):
             self._init_cache_folder()
@@ -54,7 +58,7 @@ class ScreepsWorldView:
         # 初始化地图实例
         if path.exists(f'{self.cache_path}/background.png'):
             self.background = Image.open(f'{self.cache_path}/background.png')
-            print('使用缓存地图')
+            print('使用缓存地图 ✔')
         else:
             self.background = self.draw_background()
 
@@ -152,31 +156,18 @@ class ScreepsWorldView:
                 
                 # 将用户头像贴上去
                 if 'owner' in room:
-                    avatar_path = f'{self.cache_path}/avatar/{room["owner"]}.png'
-                    if path.exists(avatar_path):
-                        # 外矿的话就比占领房间要小一号（没有按房间等级进行绘制）
-                        correct_size = (6 * ZOOM, 6 * ZOOM) if room['rcl'] == 0 else (10 * ZOOM, 10 * ZOOM)
-                        try:
-                            avatar = Image.open(avatar_path).resize(correct_size)
-
-                            # 如果是外矿的话就透明一下
-                            if room['rcl'] == 0:
-                                mask = Image.new('RGBA', correct_size)
-                                avatar = Image.blend(avatar, mask, 0.3)
-
-                            # 粘贴到指定位置
-                            self.background.paste(avatar, (x + int(((ROOM_PIXEL * ZOOM) - correct_size[0]) / 2), y + int(((ROOM_PIXEL * ZOOM) - correct_size[1]) / 2)), mask=avatar)
-                        except UnidentifiedImageError:
-                            bar.update(f'头像失效 - {avatar_path}')
-                    else:
-                        bar.update(f'未找到头像 - {avatar_path}')
+                    avatar = self._draw_avatar(room['owner'], rcl=room['rcl'])
+                    if not avatar: continue
+                    # 粘贴到指定位置
+                    self.background.paste(avatar, (x + int(((ROOM_PIXEL * ZOOM) - avatar.size[0]) / 2), y + int(((ROOM_PIXEL * ZOOM) - avatar.size[1]) / 2)), mask=avatar)
 
         bar.update('保存中')
         # 按照日期进行保存
-        result_name = time.strftime('%Y-%m-%d', time.localtime(time.time()))
-        self.background.save(f'{self.dist_path}/{result_name}.png')
+        result_path = f'{self.dist_path}/{self.result_name}.png'
+        self.background.save(result_path)
         bar.close()
 
+        print(f'已保存至 {result_path}')
         return self
 
 
@@ -210,6 +201,43 @@ class ScreepsWorldView:
         bar.close()
 
         return new_background
+
+    
+    def _draw_avatar(self, player, rcl=8):
+        """绘制指定玩家的头像
+        
+        Args:
+            player: string 要绘制的玩家名
+            rcl: 0-8 要绘制的 rcl 等级
+
+        Return:
+            Image: 绘制好的玩家头像
+        """
+        avatar_path = f'{self.cache_path}/avatar/{player}.png'
+        if path.exists(avatar_path):
+            # 外矿的话就比占领房间要小一号（没有按房间等级进行绘制）
+            correct_size = (6 * ZOOM, 6 * ZOOM) if rcl == 0 else (10 * ZOOM, 10 * ZOOM)
+            try:
+                avatar = Image.new('RGBA', (correct_size[0] + 3, correct_size[1] + 2))
+                origin = Image.open(avatar_path).resize(correct_size)
+                avatar.paste(origin, (1, 1), mask=origin)
+                
+                # 如果是外矿的话就透明一下
+                if rcl == 0:
+                    mask = Image.new('RGBA', avatar.size)
+                    avatar = Image.blend(avatar, mask, 0.3)
+
+                # 绘制边框
+                avatar_draw = ImageDraw.Draw(avatar)
+                avatar_draw.ellipse((0, 0, avatar.size[0] - 1, avatar.size[1] - 1), outline=AVATAR_OUTLINE_COLOR, width=2)
+
+                return avatar
+            except UnidentifiedImageError:
+                print(f'头像失效 - {avatar_path}')
+                return None
+        else:
+            print(f'未找到头像 - {avatar_path}')
+            return None
 
 
     def _get_room_name(self, world_size=70):

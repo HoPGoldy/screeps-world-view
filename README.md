@@ -1,6 +1,6 @@
 # screeps-world-view
 
-生成如下 screeps 的世界总览图（目前仅支持 shard3）
+生成如下 screeps 的世界总览图，支持全 shard 绘制。
 
 [![](https://s1.ax1x.com/2020/05/18/YfqmZT.th.png)](https://s1.ax1x.com/2020/05/18/YfqmZT.png)
 
@@ -45,7 +45,7 @@ python src/main.py
 
 # 计划
 
-~~头像添加黑色边框~~，~~绘制新手区和重生区~~，~~支持其他 shard~~，定时任务，发送至邮箱**
+~~头像添加黑色边框~~，~~绘制新手区和重生区~~，~~支持其他 shard~~，**定时任务，发送至邮箱**
 
 # 感谢
 

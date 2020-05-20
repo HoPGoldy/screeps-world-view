@@ -5,6 +5,8 @@ from screeps_world_view import ScreepsWorldView
 DRAW_SHARD = [ 3, 2, 1, 0 ]
 # 重试间隔（秒）
 RETRY_INTERVAL = 200
+# 零点到任务执行时的秒间隔，用于指定任务在每天的何时调用，默认为中午 12 点
+CALL_TIME = 43200
 
 # 新建调度器
 s = sched.scheduler(time.time, time.sleep)
@@ -21,10 +23,8 @@ def get_draw_interval():
     # 获取明天的秒时间戳
     tomorrow = datetime.date.today() + datetime.timedelta(days=1)
     tomorrow_time_stamp = int(time.mktime(tomorrow.timetuple()))
-    # 获取明天零点多一点的秒时间戳
-    tomorrow_time_stamp = int(tomorrow_time_stamp / 1000) * 1000 + 1
 
-    return tomorrow_time_stamp - now_time_stamp
+    return tomorrow_time_stamp - now_time_stamp + CALL_TIME
 
 
 #被调度触发的函数
@@ -40,8 +40,9 @@ def draw():
             view.draw()
         
         # 如果正常绘制完成则安排下一次绘制任务
-        s.enter(get_draw_interval(), 0, draw)
-        print('\n绘制完成，将在次日 0 点重新进行绘制，请确保本任务在后台运行。\n')
+        interval = get_draw_interval()
+        s.enter(interval, 0, draw)
+        print(f'\n绘制完成，将在 {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() + interval))} 重新绘制，请确保本任务在后台运行。\n')
     
     # 绘制异常则尝试重试
     except Exception as err:

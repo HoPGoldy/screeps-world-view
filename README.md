@@ -1,6 +1,6 @@
 # screeps-world-view
 
-生成如下 screeps 的世界总览图，支持全 shard 绘制。
+生成如下 screeps 的世界总览图，已实现全 shard 绘制，包含新手区及重生区，支持单次绘制和定时绘制。
 
 [![Y54FPA.th.gif](https://s1.ax1x.com/2020/05/19/Y54FPA.th.gif)](https://s1.ax1x.com/2020/05/19/Y54FPA.gif)
 
@@ -56,10 +56,6 @@ python src/timer.py
 ```
 
 任务配置项请参阅本文件（`src/timer.py`）头部常量。
-
-# 计划
-
-~~头像添加黑色边框~~，~~绘制新手区和重生区~~，~~支持其他 shard~~，~~定时任务~~，**发送至邮箱**
 
 # 感谢
 

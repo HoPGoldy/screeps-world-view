@@ -14,7 +14,7 @@ from simple_bar import Bar
 ROOM_PIXEL = 20
 # 区块由几乘几的房间组成
 ROOM_PRE_SECTOR = 10
-# 放大倍数，必须大于 1，因为默认情况下一个房间只有 20 像素，会影响头像显示效果，但是该值太大会导致地图显示模糊
+# 放大倍数，必须大于 1，因为默认情况下一个房间只有 20 像素，会影响头像显示效果，但是该值太大会降低渲染速度
 ZOOM = 3
 # 头像边框的颜色
 AVATAR_OUTLINE_COLOR = '#151515'
@@ -29,7 +29,7 @@ COLORS = {
 }
 
 class ScreepsWorldView:
-    # 要绘制的 shard
+    # 要绘制的 shard，在初始化时会修改为指定的值
     shard = 3
     # 持有的地图 Image 对象
     background = None

@@ -16,6 +16,8 @@ ROOM_PIXEL = 20
 ROOM_PRE_SECTOR = 10
 # 放大倍数，必须大于 1，因为默认情况下一个房间只有 20 像素，会影响头像显示效果，但是该值太大会降低渲染速度
 ZOOM = 3
+# shard0 在放大 3 倍后的像素值，注释本行会引起 pillow 的 DecompressionBombWarning 警告
+Image.MAX_IMAGE_PIXELS = 144000001
 # 头像边框的颜色
 AVATAR_OUTLINE_COLOR = '#151515'
 # 地图指定区域的颜色
@@ -38,13 +40,13 @@ class ScreepsWorldView:
     # 成果路径
     dist_path = None
     # 世界尺寸信息，在 _init_world 中初始化
-    shard_info = {}
+    shard_info = None
     # 房间信息，用于在底图上添加用户头像，键为房间名，值为房间配置信息
-    rooms = {}
+    rooms = None
     # 地图中出现的用户名，用于下载头像
-    users = []
+    users = None
     # 所有的用户名头像设置，键为玩家名，值为玩家的头像设置字符串
-    avatars_setting = {}
+    avatars_setting = None
     # 结果文件名
     result_name = time.strftime('%Y-%m-%d', time.localtime(time.time()))
 
@@ -55,9 +57,14 @@ class ScreepsWorldView:
         # 没有缓存的话就新建缓存路径
         if not path.exists('.screeps_cache'):
             self._init_cache_folder()
- 
+
+        # 初始化内部属性
         self.cache_path = f'.screeps_cache/{shard}'
         self.dist_path = f'dist/{shard}'
+        self.shard_info = {}
+        self.rooms = {}
+        self.users = []
+        self.avatars_setting = {}
 
         # 初始化世界
         self._init_world()
@@ -292,7 +299,7 @@ class ScreepsWorldView:
         params = {'rooms': self._get_room_name(), 'shard': f'shard{self.shard}', 'statName': 'owner0'}
         r = requests.post('https://screeps.com/api/game/map-stats', json=params, headers={ 'X-Token': token, 'X-Username': token }, timeout=120)
         token = r.headers["X-Token"]
-        
+
         # 将获取到的信息格式化成需要的样子
         self._format_room(json.loads(r.text))
         bar.close()

@@ -35,6 +35,8 @@ class ScreepsWorldView:
     shard = 3
     # 持有的地图 Image 对象
     background = None
+    # 头像缓存路径
+    avatar_path = '.screeps_cache/avatar'
     # 缓存路径
     cache_path = None
     # 成果路径
@@ -93,12 +95,14 @@ class ScreepsWorldView:
         会初始化缓存文件夹和成果文件夹
         """
         for shard_name in [ '0', '1', '2', '3']:
-            for type_name in [ 'room', 'avatar' ]:
+            for type_name in [ 'room' ]:
                 makedirs(f'.screeps_cache/{shard_name}/{type_name}')
             
             # 创建结果文件夹
             dist_path = f'dist/{shard_name}'
             if not path.exists(dist_path): makedirs(dist_path)
+        # 头像缓存目录
+        makedirs(f'.screeps_cache/avatar')
         # print('缓存目录创建成功')
 
 
@@ -232,7 +236,7 @@ class ScreepsWorldView:
         Return:
             Image: 绘制好的玩家头像
         """
-        avatar_path = f'{self.cache_path}/avatar/{player}.png'
+        avatar_path = f'{self.avatar_path}/{player}.png'
         if path.exists(avatar_path):
             # 外矿的话就比占领房间要小一号（没有按房间等级进行绘制）
             correct_size = (6 * ZOOM, 6 * ZOOM) if rcl == 0 else (10 * ZOOM, 10 * ZOOM)
@@ -351,7 +355,7 @@ class ScreepsWorldView:
         Returns:
             self: 自身
         """
-        avatars_setting_json_path = f'{self.cache_path}/avatar/player_setting.json'
+        avatars_setting_json_path = f'{self.avatar_path}/shard{self.shard}_player_setting.json'
 
         # 获取之前缓存的玩家头像配置，用于和最新的用户设置做比对，如果有不同则更新其头像，否则使用缓存好的头像
         cache_avatars_setting = None
@@ -361,7 +365,7 @@ class ScreepsWorldView:
 
         bar = Bar('下载头像')
         for i, username in enumerate(self.users):
-            avatar_path = f'{self.cache_path}/avatar/{username}.png'
+            avatar_path = f'{self.avatar_path}/{username}.png'
             bar.update(f'{username} {i + 1}/{len(self.users)}')
 
             # 头像存在就比较头像配置是否相同，完全一样就不需要下载

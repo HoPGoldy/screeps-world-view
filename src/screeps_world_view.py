@@ -50,7 +50,7 @@ class ScreepsWorldView:
     # 所有的用户名头像设置，键为玩家名，值为玩家的头像设置字符串
     avatars_setting = None
     # 结果文件名
-    result_name = time.strftime('%Y-%m-%d', time.localtime(time.time()))
+    result_name = ''
 
     def __init__(self, shard=3):
         self.shard = shard
@@ -67,6 +67,7 @@ class ScreepsWorldView:
         self.rooms = {}
         self.users = []
         self.avatars_setting = {}
+        self.result_name = time.strftime('%Y-%m-%d', time.localtime(time.time()))
 
         # 初始化世界
         self._init_world()

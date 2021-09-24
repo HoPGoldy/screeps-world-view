@@ -1,5 +1,7 @@
 # screeps-world-view
 
+> **本项目已经废弃并停止维护，替代项目见 [screeps-world-printer](https://github.com/HoPGoldy/screeps-world-printer)。**
+
 生成如下 screeps 的世界总览图，已实现全 shard 绘制，包含新手区及重生区，支持单次绘制和定时绘制。
 
 [![Y54FPA.th.gif](https://s1.ax1x.com/2020/05/19/Y54FPA.th.gif)](https://s1.ax1x.com/2020/05/19/Y54FPA.gif)
